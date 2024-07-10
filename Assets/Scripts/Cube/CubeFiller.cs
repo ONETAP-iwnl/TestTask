@@ -17,7 +17,8 @@ public class CubeFiller : MonoBehaviour
         foreach (GameObject targetPosition in targetPositions)
         {
             GameObject randomCubePrefab = cubePrefabs[Random.Range(0, cubePrefabs.Length)];
-            Instantiate(randomCubePrefab, targetPosition.transform.position, Quaternion.identity, targetPosition.transform);
+            GameObject cube = Instantiate(randomCubePrefab, targetPosition.transform.position, Quaternion.identity, targetPosition.transform);
+            cube.GetComponent<Cube>().cubeID = Random.Range(0, cubePrefabs.Length);
         }
     }
 }

@@ -5,19 +5,31 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
+    [Header("Variable")]
     public float speed = 7.5f;
     public float jumpSpeed = 8.0f;
     public float gravity = 20.0f;
-    public Camera playerCamera;
     public float lookSpeed = 2.0f;
     public float lookXLimit = 45.0f;
-    public Transform cubeHoldPosition; // Позиция для удержания куба
 
-    public CubeManager cubeManager;
+    [Space(3f)]
+    [Header("MainCamera")]
+    [SerializeField]
+    private protected Camera playerCamera;
+
+
+    [Space(3f)]
+    [Header("Positon")]
+    [SerializeField]
+    private protected Transform cubeHoldPosition;
+
+    private Cube carriedCubeScript;
+    public CubeInsertionManager insertionManager;
 
     CharacterController characterController;
     Vector3 moveDirection = Vector3.zero;
     Vector2 rotation = Vector2.zero;
+
 
     [HideInInspector]
     public bool canMove = true;
@@ -38,7 +50,6 @@ public class PlayerController : MonoBehaviour
     {
         if (characterController.isGrounded)
         {
-            // We are grounded, so recalculate move direction based on axes
             Vector3 forward = transform.TransformDirection(Vector3.forward);
             Vector3 right = transform.TransformDirection(Vector3.right);
             float curSpeedX = canMove ? speed * Input.GetAxis("Vertical") : 0;
@@ -50,14 +61,10 @@ public class PlayerController : MonoBehaviour
                 moveDirection.y = jumpSpeed;
             }
         }
-
-        // Apply gravity
         moveDirection.y -= gravity * Time.deltaTime;
-
-        // Move the controller
         characterController.Move(moveDirection * Time.deltaTime);
 
-        // Player and Camera rotation
+
         if (canMove)
         {
             rotation.y += Input.GetAxis("Mouse X") * lookSpeed;
@@ -67,7 +74,7 @@ public class PlayerController : MonoBehaviour
             transform.eulerAngles = new Vector2(0, rotation.y);
         }
 
-        // Handle cube interaction
+
         if (Input.GetKeyDown(KeyCode.E))
         {
             if (!carryingCube)
@@ -82,24 +89,52 @@ public class PlayerController : MonoBehaviour
                 DropCube();
             }
         }
+
+        if(Input.GetKeyDown(KeyCode.F))
+        {
+            if (carriedCube != null)
+            {
+                InsertCubeInZone();
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            bool isCorrect = insertionManager.CheckCorrectPlacement();
+            if (isCorrect)
+            {
+                Debug.Log("правильно расставленные кубики!");
+            }
+            else
+            {
+                Debug.Log("кубики расставлены неправильно");
+            }
+        }
     }
 
     void PickupCube()
     {
-        if (!carryingCube)
+        RaycastHit hit;
+        if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, 5f))
         {
-            RaycastHit hit;
-            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, 2f))
+            if (hit.collider.CompareTag("Cube"))
             {
-                if (hit.collider.CompareTag("Cube"))
+                carriedCube = hit.collider.gameObject;
+                carriedCubeScript = carriedCube.GetComponent<Cube>();
+                if(!carriedCubeScript.IsDropped)
                 {
-                    carriedCube = hit.collider.gameObject;
+                    carryingCube = Instantiate(hit.collider.gameObject, cubeHoldPosition.position, cubeHoldPosition.rotation);
                     carriedCube.transform.SetParent(cubeHoldPosition);
                     carriedCube.transform.localPosition = Vector3.zero;
-                    carriedCube.GetComponent<Rigidbody>().isKinematic = true; // Отключаем физику
+                    carriedCube.GetComponent<Rigidbody>().isKinematic = true;
                     carryingCube = true;
-                    Transform spawnPoint = carriedCube.GetComponent<Cube>().spawnPoint;
-                    cubeManager.CubePickedUp(spawnPoint);
+
+                }
+                else if(carriedCubeScript.IsDropped)
+                {
+                    carriedCube.transform.SetParent(cubeHoldPosition);
+                    carriedCube.transform.localPosition = Vector3.zero;
+                    carriedCube.GetComponent<Rigidbody>().isKinematic = true;
+                    carryingCube = true;
                 }
             }
         }
@@ -107,28 +142,45 @@ public class PlayerController : MonoBehaviour
 
     void DropCube()
     {
-        if (carryingCube)
+        carriedCubeScript = carriedCube.GetComponent<Cube>();
+        if (carryingCube && carriedCube != null)
         {
-            Vector3 dropPosition = transform.position + transform.forward * 2; // Позиция перед игроком
-            Debug.Log("Dropping cube at position: " + dropPosition);
+            carriedCube.GetComponent<Rigidbody>().isKinematic = false;
             carriedCube.transform.SetParent(null);
-            carriedCube.transform.position = dropPosition;
-            carriedCube.GetComponent<Rigidbody>().isKinematic = false; // Включаем физику
             carryingCube = false;
             carriedCube = null;
+            carriedCubeScript.IsDropped = true;
         }
     }
 
-    Transform GetTargetPosition()
+    void InsertCubeInZone()
     {
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f))
+        if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out RaycastHit hit, 5f))
         {
             if (hit.collider.CompareTag("TargetZone"))
             {
-                return hit.collider.transform;
+                int zoneIndex = System.Array.IndexOf(insertionManager.targetZones, hit.collider.gameObject);
+                if (zoneIndex >= 0)
+                {
+                    if (!insertionManager.IsZoneOccupied(zoneIndex))
+                    {
+                        carriedCube.transform.SetParent(insertionManager.targetZones[zoneIndex].transform);
+                        carriedCube.transform.localPosition = Vector3.zero;
+                        Rigidbody rb = carriedCube.GetComponent<Rigidbody>();
+                        if (rb != null)
+                        {
+                            rb.isKinematic = true; // Disable physics
+                        }
+                        insertionManager.InsertCube(carriedCube, zoneIndex);
+                        carriedCube = null;
+                        carryingCube = false;
+                    }
+                    else
+                    {
+                        Debug.Log("таргет зона занята уже!!");
+                    }
+                }
             }
         }
-        return null;
     }
 }

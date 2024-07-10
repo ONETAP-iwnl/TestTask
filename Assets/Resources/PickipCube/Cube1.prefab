@@ -146,4 +146,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ce46e4a73099d14b9ba56952f85037b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cubeID: 1
   spawnPoint: {fileID: 9186141727719866313}
+  IsDropped: 0
